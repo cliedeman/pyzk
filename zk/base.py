@@ -10,6 +10,7 @@ from .attendance import Attendance
 from .exception import ZKErrorConnection, ZKErrorResponse, ZKNetworkError
 from .user import User
 from .finger import Finger
+from .timezone import TimeZone
 
 
 def safe_cast(val, to_type, default=None):
@@ -1115,6 +1116,37 @@ class ZK(object):
             templatedata = templatedata[size:]
             total_size -= size
         return templates
+
+    def get_user_timezone_set(self, uid = ''):
+        """
+        :param uid: user ID that are generated from device
+        :return: User Timezone object of the selected user
+        """
+        for _retries in range(3):
+            command = const.CMD_USERTZ_RRQ
+            command_string = pack('H', uid)
+            response_size = 8 + 8
+            cmd_response = self.__send_command(command, command_string, response_size)
+            if cmd_response.get('status'):
+                flag, tz1, tz2, tz3 = unpack('<HHHH', self.__data.ljust(8, b'\x00')[:8])
+                return TimeZone(flag > 0, tz1, tz2, tz3)
+            else:
+                raise ZKErrorResponse("can't get time zone")
+
+        else:
+            if self.verbose: print ("Can't get user time zone")
+            return None
+
+    def set_user_timezone_set(self, uid = '', tzflag=True, tz1 = 1, tz2 = 0, tz3 = 0):
+        """
+        :param uid: user ID that are generated from device
+        :param tzflag: Is user using own timezones? false will set tz to 0
+        """
+        command = const.CMD_USERTZ_WRQ
+        command_string = pack('<IIIII', uid, 1 if tzflag else 0, tz1, tz2, tz3)
+        cmd_response = self.__send_command(command, command_string)
+        if not cmd_response.get('status'):
+            raise ZKErrorResponse("Can't set time zone")
 
     def get_users(self):
         """
